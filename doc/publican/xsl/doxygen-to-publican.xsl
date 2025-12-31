@@ -9,9 +9,7 @@
   <section id="{$which}-Functions">
     <title>Functions</title>
     <para />
-    <variablelist>
-      <xsl:apply-templates select="/doxygen/compounddef[@kind='file']/sectiondef/memberdef" />
-    </variablelist>
+    <xsl:apply-templates select="/doxygen/compounddef[@kind='file']/sectiondef" />
   </section>
 
 </xsl:template>
@@ -99,10 +97,30 @@
   <xsl:apply-templates select="para" />
 </xsl:template>
 
+<xsl:template match="sectiondef">
+  <xsl:variable name="docitems"
+        select="memberdef[
+                (@kind = 'function' and
+                 (@static = 'no' or
+                  substring(location/@bodyfile,
+                            string-length(location/@bodyfile) - 1,
+                            1000) = '.h'
+                 )
+                 and @prot = 'public'
+                )
+                or
+                (@kind != 'function' and normalize-space(briefdescription) != '')
+                ]" />
+  <xsl:if test="$docitems">
+    <variablelist>
+      <!-- Apply memberdef template -->
+      <xsl:apply-templates select="$docitems" />
+    </variablelist>
+  </xsl:if>
+</xsl:template>
+
 <!-- methods -->
 <xsl:template match="memberdef" >
-  <xsl:if test="@kind = 'function' and @static = 'no' and @prot = 'public' or
-                @kind !='function' and normalize-space(briefdescription) != ''">
     <varlistentry id="{$which}-{@id}">
         <term>
           <xsl:value-of select="name"/>
@@ -117,7 +135,6 @@
           <xsl:apply-templates select="detaileddescription" />
         </listitem>
     </varlistentry>
-  </xsl:if>
 </xsl:template>
 
 <!-- classes -->
@@ -137,11 +154,7 @@
             <para />
           </xsl:otherwise>
         </xsl:choose>
-        <xsl:if test="sectiondef/memberdef[@kind='function' and @static='no']">
-          <variablelist>
-            <xsl:apply-templates select="sectiondef/memberdef" />
-          </variablelist>
-        </xsl:if>
+        <xsl:apply-templates select="sectiondef" />
     </section>
 </xsl:template>
 </xsl:stylesheet>

@@ -4,6 +4,7 @@ merge_mapcoords_xsl = files('xsl/merge-mapcoords.xsl')
 to_publican_xsl = files('xsl/doxygen-to-publican.xsl')
 
 publican_inputs = []
+publican_image_maps = []
 
 foreach src : files([
 	'Wayland.xml', # must be first in publican_inputs
@@ -38,33 +39,40 @@ publican_inputs += custom_target(
 	output: 'ProtocolInterfaces.xml'
 )
 
+# Doxygen generates a myriad of files, and offers an XSLT
+# to combine them all into one. This does the combining.
+# The result is still Doxygen XML.
 ClientAPI_combined = custom_target(
-	'ClientAPI-combined',
+	'ClientAPI-combine-doxygen-files',
 	command: [ xsltproc, '-o', '@OUTPUT@', '@INPUT@' ],
 	input: [ doxygen_Client_combine_xslt, doxygen_Client_index_xml ],
 	output: 'ClientAPI-combined.xml'
 )
 
+# This converts Doxygen XML to DocBook XML.
 publican_inputs += custom_target(
-	'ClientAPI.xml',
+	'ClientAPI-doxygen-to-docbook',
 	command: [ xsltproc, '-o', '@OUTPUT@', '--stringparam', 'which', 'Client', to_publican_xsl, '@INPUT@' ],
 	input: ClientAPI_combined,
 	output: 'ClientAPI.xml'
 )
 
 ServerAPI_combined = custom_target(
-	'ServerAPI-combined',
+	'ServerAPI-combine-doxygen-files',
 	command: [ xsltproc, '-o', '@OUTPUT@', '@INPUT@' ],
 	input: [ doxygen_Server_combine_xslt, doxygen_Server_index_xml ],
 	output: 'ServerAPI-combined.xml'
 )
 
 publican_inputs += custom_target(
-	'ServerAPI.xml',
+	'ServerAPI-doxygen-to-docbook',
 	command: [ xsltproc, '-o', '@OUTPUT@', '--stringparam', 'which', 'Server', to_publican_xsl, '@INPUT@' ],
 	input: ServerAPI_combined,
 	output: 'ServerAPI.xml'
 )
+
+subdir('html/css')
+subdir('html/images')
 
 foreach src : files([
 	'Architecture.xml',
@@ -76,23 +84,20 @@ foreach src : files([
 		command: [
 			xsltproc,
 			'-o', '@OUTPUT@',
-			'--stringparam', 'basedir', '.',
+			'--stringparam', 'basedir', meson.current_build_dir() / 'html',
 			merge_mapcoords_xsl,
 			'@INPUT@',
 		],
-		input: [name],
+		input: src,
 		output: [name],
+		depends: publican_image_maps,
 	)
 endforeach
-
-subdir('html/css')
-subdir('html/images')
 
 custom_target(
 	'Wayland-docbook-html',
 	command: [
 		xmlto,
-		'--skip-validation',
 		'--stringparam', 'chunker.output.encoding=UTF-8',
 		'--stringparam', 'chunk.section.depth=0',
 		'--stringparam', 'toc.section.depth=1',
