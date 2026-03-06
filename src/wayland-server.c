@@ -450,11 +450,11 @@ wl_client_connection_data(int fd, uint32_t mask, void *data)
 		    resource->version > 0 && resource->version < since) {
 			wl_resource_post_error(client->display_resource,
 					       WL_DISPLAY_ERROR_INVALID_METHOD,
-					       "invalid method %d (since %d < %d)"
-					       ", object %s#%u",
-					       opcode, resource->version, since,
+					       "invalid version for %s#%u.%s (%d, need at least %d)",
 					       object->interface->name,
-					       object->id);
+					       object->id,
+					       message->name,
+					       resource->version, since);
 			break;
 		}
 
@@ -1054,30 +1054,25 @@ registry_bind(struct wl_client *client,
 		if (global->name == name)
 			break;
 
-	if (&global->link == &display->global_list)
+	if (&global->link == &display->global_list || !wl_global_is_visible(client, global))
 		wl_resource_post_error(resource,
 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "invalid global %s (%d)", interface, name);
+				       "global %s (%"PRIu32") is unavailable", interface, name);
 	else if (strcmp(global->interface->name, interface) != 0)
 		wl_resource_post_error(resource,
 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "invalid interface for global %u: "
-				       "have %s, wanted %s",
-				       name, interface, global->interface->name);
+				       "invalid interface for global %"PRIu32": expected %s, got %s",
+				       name, global->interface->name, interface);
 	else if (version == 0)
 		wl_resource_post_error(resource,
 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "invalid version for global %s (%d): 0 is not a valid version",
+				       "invalid version for global %s (%"PRIu32"): 0 is not a valid version",
 				       interface, name);
 	else if (global->version < version)
 		wl_resource_post_error(resource,
 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "invalid version for global %s (%d): have %d, wanted %d",
+				       "invalid version for global %s (%"PRIu32"): expected at most %d, got %d",
 				       interface, name, global->version, version);
-	else if (!wl_global_is_visible(client, global))
-		wl_resource_post_error(resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "invalid global %s (%d)", interface, name);
 	else
 		global->bind(client, global->data, version, id);
 }
