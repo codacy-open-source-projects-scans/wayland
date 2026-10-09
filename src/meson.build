@@ -79,7 +79,7 @@ if get_option('scanner')
 	endif
 endif
 
-if meson.is_cross_build() or not get_option('scanner')
+if not meson.can_run_host_binaries() or not get_option('scanner')
 	scanner_dep = dependency('wayland-scanner', native: true, version: meson.project_version())
 	wayland_scanner_for_build = find_program(scanner_dep.get_variable(pkgconfig: 'wayland_scanner'))
 else
@@ -218,9 +218,7 @@ if get_option('libraries')
 		]
 	)
 
-	if meson.version().version_compare('>= 0.54.0')
-		meson.override_dependency('wayland-server', wayland_server_dep)
-	endif
+	meson.override_dependency('wayland-server', wayland_server_dep)
 
 	wayland_client = library(
 		'wayland-client',
@@ -267,9 +265,7 @@ if get_option('libraries')
 		]
 	)
 
-	if meson.version().version_compare('>= 0.54.0')
-		meson.override_dependency('wayland-client', wayland_client_dep)
-	endif
+	meson.override_dependency('wayland-client', wayland_client_dep)
 
 	install_headers([
 		'wayland-util.h',

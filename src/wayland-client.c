@@ -26,12 +26,15 @@
 
 #define _GNU_SOURCE
 
+#include "../config.h"
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -1331,7 +1334,12 @@ wl_display_connect_to_fd(int fd)
  *
  * If WAYLAND_SOCKET is set, it's interpreted as a file descriptor number
  * referring to an already opened socket. In this case, the socket is used
- * as-is and \c name is ignored.
+ * as-is and \c name is ignored. The WAYLAND_SOCKET env var is unset and the
+ * `FD_CLOEXEC` flag is set on the file descriptor.
+ *
+ * With WAYLAND_SOCKET set, this call is **not** thread safe, since \c unsetenv
+ * is not thread safe, and since it may race with another thread calling
+ * `wl_display_connect`.
  *
  * If \c name is a relative path, then the socket is opened relative to
  * the XDG_RUNTIME_DIR directory.
@@ -1577,7 +1585,6 @@ queue_event(struct wl_display *display, int len)
 	const struct wl_message *message;
 	struct wl_event_queue *queue;
 	struct timespec tp;
-	unsigned int time;
 	int num_zombie_fds;
 
 	wl_connection_copy(display->connection, p, sizeof p);
@@ -1619,11 +1626,13 @@ queue_event(struct wl_display *display, int len)
 
 		if (debug_client) {
 			clock_gettime(CLOCK_REALTIME, &tp);
-			time = (tp.tv_sec * 1000000L) + (tp.tv_nsec / 1000);
-			fprintf(stderr, "%s[%7u.%03u] %sdiscarded %s[%s]%s#%u%s.[event %d]%s"
+			fprintf(stderr, "%s[%02u:%02u:%02u.%06u] %sdiscarded %s[%s]%s#%u%s.[event %d]%s"
 				"(%d fd, %d byte)\n",
 				debug_color ? WL_DEBUG_COLOR_GREEN : "",
-				time / 1000, time % 1000,
+				(unsigned) ((tp.tv_sec / 3600) % 24),
+				(unsigned) ((tp.tv_sec / 60) % 60),
+				(unsigned) (tp.tv_sec % 60),
+				(unsigned) (tp.tv_nsec / 1000),
 				debug_color ? WL_DEBUG_COLOR_RED : "",
 				debug_color ? WL_DEBUG_COLOR_BLUE : "",
 				zombie ? "zombie" : "unknown",
@@ -2055,7 +2064,19 @@ wl_display_poll(struct wl_display *display,
 			timespec_sub_saturate(&result, &deadline, &now);
 			remaining_timeout = &result;
 		}
+#ifdef HAVE_PPOLL
 		ret = ppoll(pfd, 1, remaining_timeout, NULL);
+#else
+		if (remaining_timeout) {
+			int64_t timeout_msec = timespec_to_msec(remaining_timeout);
+
+			if (timeout_msec > INT_MAX)
+				timeout_msec = INT_MAX;
+			ret = poll(pfd, 1, (int) timeout_msec);
+		} else {
+			ret = poll(pfd, 1, -1);
+		}
+#endif
 	} while (ret == -1 && errno == EINTR);
 
 	return ret;

@@ -75,17 +75,47 @@ wl_os_socket_cloexec(int domain, int type, int protocol)
 {
 	int fd;
 
+#ifdef SOCK_CLOEXEC
 	fd = wl_socket(domain, type | SOCK_CLOEXEC, protocol);
 	if (fd >= 0)
 		return fd;
 	if (errno != EINVAL)
 		return -1;
+#endif
 
 	fd = wl_socket(domain, type, protocol);
 	return set_cloexec_or_close(fd);
 }
 
-#if defined(__FreeBSD__)
+int
+wl_os_socketpair_cloexec(int domain, int type, int protocol, int sv[2])
+{
+	int retval;
+
+#ifdef SOCK_CLOEXEC
+	retval = socketpair(domain, type | SOCK_CLOEXEC, protocol, sv);
+	if (retval >= 0)
+		return retval;
+	if (errno != EINVAL)
+		return -1;
+#endif
+
+	retval = socketpair(domain, type, protocol, sv);
+	if (retval < 0)
+		return retval;
+
+	sv[0] = set_cloexec_or_close(sv[0]);
+	sv[1] = set_cloexec_or_close(sv[1]);
+	if (sv[0] == -1 || sv[1] == -1) {
+		close(sv[0]);
+		close(sv[1]);
+		return -1;
+	}
+
+	return 0;
+}
+
+#if defined(LOCAL_PEERCRED)
 int
 wl_os_socket_peercred(int sockfd, uid_t *uid, gid_t *gid, pid_t *pid)
 {
@@ -134,11 +164,13 @@ wl_os_dupfd_cloexec(int fd, int minfd)
 {
 	int newfd;
 
+#ifdef F_DUPFD_CLOEXEC
 	newfd = wl_fcntl(fd, F_DUPFD_CLOEXEC, minfd);
 	if (newfd >= 0)
 		return newfd;
 	if (errno != EINVAL)
 		return -1;
+#endif
 
 	newfd = wl_fcntl(fd, F_DUPFD, minfd);
 	return set_cloexec_or_close(newfd);
@@ -186,7 +218,7 @@ wl_os_recvmsg_cloexec(int sockfd, struct msghdr *msg, int flags)
 	 * fix (https://cgit.freebsd.org/src/commit/?id=6ceacebdf52211).
 	 */
 #pragma message("Using fallback directly since MSG_CMSG_CLOEXEC is broken.")
-#else
+#elif defined(MSG_CMSG_CLOEXEC)
 	ssize_t len;
 
 	len = wl_recvmsg(sockfd, msg, flags | MSG_CMSG_CLOEXEC);

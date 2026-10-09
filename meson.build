@@ -1,6 +1,6 @@
 project(
 	'wayland', 'c',
-	version: '1.25.90',
+	version: '1.26.90',
 	license: 'MIT',
 	meson_version: '>= 0.64.0',
 	default_options: [
@@ -46,6 +46,7 @@ have_funcs = [
 	'accept4',
 	'mkostemp',
 	'posix_fallocate',
+	'ppoll',
 	'prctl',
 	'memfd_create',
 	'mremap',
